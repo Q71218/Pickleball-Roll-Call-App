@@ -119,11 +119,8 @@
         function renderStudentList() {
             if (!globalData) return;
             const selectedDate = document.getElementById('classDate').value;
-            const selectedTimeSlot = document.getElementById('timeSlotSelect5') || document.getElementById('timeSlotSelect').value;
-            const listContainer = document.getElementById('studentList');
-
-            // 修正時段取值
             const actualTimeSlot = document.getElementById('timeSlotSelect').value;
+            const listContainer = document.getElementById('studentList');
 
             if (!actualTimeSlot) {
                 listContainer.innerHTML = `<p class="text-center text-gray-400 py-4">請選擇上課時段</p>`;
@@ -142,21 +139,36 @@
 
             listContainer.innerHTML = '';
 
-            matchedStudents.forEach(scheduleItem => {
+            matchedStudents.forEach((scheduleItem, index) => {
                 const studentInfo = globalData.students.find(s => String(s.學員ID) === String(scheduleItem.學員ID)) || { 購買堂數: 0, 已上堂數: 0 };
                 
                 const total = Number(studentInfo.購買堂數) || 0;
                 const used = Number(studentInfo.已上堂數) || 0;
                 const remaining = total - used;
                 
-                const lastLesson = globalData.lastLessons[scheduleItem.姓名] || { date: "", summary: "尚無上課紀錄", note: "" };
-                
-                // 直接使用後端處理好的簡潔日期 (例如 09/19)
-                const dateTag = lastLesson.date ? `${lastLesson.date}` : '';
+                // 取得該學員最近的歷史紀錄陣列 (由後端提供)
+                const historyList = globalData.lastLessons[scheduleItem.姓名] || [];
+                const latestLesson = historyList.length > 0 ? historyList[0] : { date: "", summary: "尚無上課紀錄", note: "" };
 
                 const badgeColor = remaining <= 2 ? 'text-red-500 bg-red-50 border-red-200' : 'text-gray-500 bg-gray-50 border-gray-200';
 
-                let noteHtml = lastLesson.note ? `<div class="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 mt-1">📝 備忘：${lastLesson.note}</div>` : '';
+                // 組合歷史紀錄清單 HTML
+                let historyHtml = '';
+                if (historyList.length > 0) {
+                    historyList.forEach(item => {
+                        let noteText = item.note ? ` <span class="text-amber-700 bg-amber-50 px-1 rounded">📝 ${item.note}</span>` : '';
+                        historyHtml += `
+                            <div class="text-xs text-gray-700 py-1 border-b border-blue-100 last:border-none flex justify-between items-center">
+                                <span><strong class="text-blue-900">${item.date || '未知日期'}</strong>：${item.summary}${noteText}</span>
+                            </div>
+                        `;
+                    });
+                } else {
+                    historyHtml = `<div class="text-xs text-gray-400 py-1">尚無歷史上課紀錄</div>`;
+                }
+
+                const collapseId = `history-box-${index}`;
+                const arrowId = `arrow-${index}`;
 
                 listContainer.innerHTML += `
                     <div class="p-3 bg-white rounded-xl border border-gray-200 shadow-sm space-y-2">
@@ -175,16 +187,39 @@
                             </div>
                         </div>
                         
-                        <!-- 💡 智慧決策面板：極簡乾淨的上次進度與備忘 -->
-                        <div class="bg-blue-50 border border-blue-100 rounded-lg p-2 text-xs space-y-1">
-                            <div class="text-blue-800 font-medium">
-                                📌 上次 (${dateTag})：${lastLesson.summary}
+                        <!-- 💡 點擊整塊藍色區域即可展開/收合最近 3 次紀錄 -->
+                        <div onclick="toggleHistory('${collapseId}', '${arrowId}')" class="bg-blue-50 border border-blue-100 rounded-lg p-2.5 text-xs cursor-pointer hover:bg-blue-100 transition select-none">
+                            <div class="flex justify-between items-center">
+                                <div class="text-blue-900 font-medium">
+                                    📌 上次 (${latestLesson.date || '無'})：${latestLesson.summary} ${latestLesson.note ? '📝' : ''}
+                                </div>
+                                <span id="${arrowId}" class="text-blue-600 font-bold bg-white px-2 py-0.5 rounded shadow-sm border border-blue-200">
+                                    歷史 (3次) ▼
+                                </span>
                             </div>
-                            ${noteHtml}
+                            
+                            <!-- 展開後的最近 3 次完整清單 -->
+                            <div id="${collapseId}" class="hidden mt-2 pt-2 border-t border-blue-200 space-y-1">
+                                <div class="text-[11px] font-bold text-blue-900 mb-1">最近上課紀錄 (由新到舊)：</div>
+                                ${historyHtml}
+                            </div>
                         </div>
                     </div>
                 `;
             });
+        }
+
+        // 點擊卡片展開或收合的互動函式
+        function toggleHistory(boxId, arrowId) {
+            const box = document.getElementById(boxId);
+            const arrow = document.getElementById(arrowId);
+            if (box.classList.contains('hidden')) {
+                box.classList.remove('hidden');
+                arrow.innerText = '收合 ▲';
+            } else {
+                box.classList.add('hidden');
+                arrow.innerText = '歷史 (3次) ▼';
+            }
         }
 
         function submitAttendance() {
