@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>匹克球課堂點名系統</title>
+    <!-- 引入 Tailwind CSS 讓手機排版好看又快速 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-y-screen pb-12">
+    <div class="max-w-md mx-auto bg-white min-h-screen shadow-lg flex flex-col">
+        
+        <!-- 頂部標題 -->
+        <div class="bg-green-600 text-white p-4 text-center font-bold text-xl shadow">
+            🎾 匹克球課堂點名
+        </div>
+
+        <!-- 表單與內容區 -->
+        <div class="p-4 flex-1 space-y-4">
+            
+            <!-- 上課日期 -->
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-1">上課日期：</label>
+                <input type="date" id="classDate" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-green-500 outline-none">
+            </div>
+
+            <!-- 當日教學簡述 -->
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-1">當日教學簡述：</label>
+                <input type="text" id="teachingSummary" placeholder="例如：正手拍基礎、底線抽球" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-green-500 outline-none">
+            </div>
+
+            <!-- 教練其他備註 -->
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-1">教練其他備註（選填）：</label>
+                <textarea id="classNote" rows="2" placeholder="學員狀況或場地備註..." class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-green-500 outline-none"></textarea>
+            </div>
+
+            <hr class="my-2">
+
+            <!-- 學員清單標題 -->
+            <div class="flex justify-between items-center">
+                <span class="font-bold text-gray-800 text-lg">學員點名清單</span>
+                <span id="loadingText" class="text-xs text-gray-400">載入中...</span>
+            </div>
+
+            <!-- 學員清單容器 -->
+            <div id="studentList" class="space-y-3">
+                <!-- 動態載入的學員卡片會在這裡顯示 -->
+            </div>
+        </div>
+
+        <!-- 底部固定送出按鈕 -->
+        <div class="p-4 bg-white border-t sticky bottom-0 shadow-inner">
+            <button onclick="submitAttendance()" id="submitBtn" class="w-full bg-green-600 text-white font-bold py-3.5 rounded-xl hover:bg-green-700 transition shadow-md">
+                確認送出點名
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // 🛑【非常重要】請將下方引號內的網址，換成你在第二步取得的「網頁應用程式網址 (Web App URL)」
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbwVA2usi9g9Nl62yIng7J87WHEqPnH0FOUSSp3wDaB-EUQLJVFUgCnY7QmuTRIwylpI/exec";
+
+        // 頁面載入完成後自動取得學員名單與預設今天日期
+        window.onload = function() {
+            document.getElementById('classDate').valueAsDate = new Date();
+            loadStudents();
+        };
+
+        // 讀取學員名單函式
+        function loadStudents() {
+            const listContainer = document.getElementById('studentList');
+            const loadingText = document.getElementById('loadingText');
+
+            fetch(GAS_URL)
+                .then(res => res.json())
+                .then(data => {
+                    listContainer.innerHTML = '';
+                    loadingText.innerText = `共 ${data.length} 位學員`;
+
+                    if (data.length === 0) {
+                        listContainer.innerHTML = `<p class="text-center text-gray-400 py-4">目前沒有學員資料，請至 Google 試算表新增。</p>`;
+                        return;
+                    }
+
+                    data.forEach(student => {
+                        // 計算剩餘堂數 (購買堂數 - 已上堂數)
+                        const total = Number(student.購買堂數) || 0;
+                        const used = Number(student.已上堂數) || 0;
+                        const remaining = total - used;
+                        
+                        // 如果剩餘堂數 <= 2，顯示紅字提醒
+                        const badgeColor = remaining <= 2 ? 'text-red-500 bg-red-50 border-red-200' : 'text-gray-500 bg-gray-50 border-gray-200';
+
+                        listContainer.innerHTML += `
+                            <div class="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-200 shadow-sm">
+                                <div>
+                                    <div class="font-bold text-gray-800 text-base">${student.姓名}</div>
+                                    <div class="text-xs px-2 py-0.5 rounded-md inline-block mt-1 border ${badgeColor}">
+                                        剩餘堂數: ${remaining} (已上: ${used})
+                                    </div>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <select data-id="${student.學員ID}" data-name="${student.姓名}" class="attendance-status border border-gray-300 rounded-lg p-2 bg-gray-50 font-medium text-sm focus:ring-2 focus:ring-green-500 outline-none">
+                                        <option value="Present" selected>🟢 到班</option>
+                                        <option value="Absent">🔴 缺席</option>
+                                    </select>
+                                </div>
+                            </div>
+                        `;
+                    });
+                })
+                .catch(err => {
+                    console.error(err);
+                    loadingText.innerText = '載入失敗';
+                    listContainer.innerHTML = `<p class="text-center text-red-400 py-4">無法載入學員資料，請檢查 GAS 網址或網路連線。</p>`;
+                });
+        }
+
+        // 送出點名邏輯
+        function submitAttendance() {
+            const date = document.getElementById('classDate').value;
+            const teachingSummary = document.getElementById('teachingSummary').value;
+            const note = document.getElementById('classNote').value;
+            const selects = document.querySelectorAll('.attendance-status');
+            const submitBtn = document.getElementById('submitBtn');
+
+            if (!date) {
+                alert('請選擇上課日期！');
+                return;
+            }
+
+            if (!teachingSummary) {
+                alert('請填寫當日教學簡述！');
+                return;
+            }
+
+            let attendanceData = [];
+            selects.forEach(sel => {
+                attendanceData.push({
+                    studentId: sel.getAttribute('data-id'),
+                    name: sel.getAttribute('data-name'),
+                    status: sel.value
+                });
+            });
+
+            // 鎖定按鈕防止重複點擊
+            submitBtn.disabled = true;
+            submitBtn.innerText = '正在送出並更新堂數...';
+
+            fetch(GAS_URL, {
+                method: 'POST',
+                body: JSON.stringify({ 
+                    date: date, 
+                    teachingSummary: teachingSummary, 
+                    note: note, 
+                    attendance: attendanceData 
+                })
+            })
+            .then(res => res.json())
+            .then(res => {
+                if(res.status === 'success') {
+                    alert('🎉 點名成功！學員堂數已自動更新。');
+                    location.reload(); // 重新整理頁面
+                } else {
+                    alert('送出發生錯誤：' + res.message);
+                    submitBtn.disabled = false;
+                    submitBtn.innerText = '確認送出點名';
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('連線失敗，請檢查網路！');
+                submitBtn.disabled = false;
+                submitBtn.innerText = '確認送出點名';
+            });
+        }
+    </script>
+</body>
+</html>
