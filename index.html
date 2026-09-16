@@ -23,7 +23,7 @@
                 <input type="date" id="classDate" onchange="filterSchedule()" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-green-500 outline-none">
             </div>
 
-            <!-- 上課時段 (動態從 Schedule 讀取) -->
+            <!-- 上課時段 -->
             <div>
                 <label class="block text-gray-700 text-sm font-bold mb-1">上課時段：</label>
                 <select id="timeSlotSelect" onchange="renderStudentList()" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-green-500 outline-none font-medium">
@@ -116,42 +116,23 @@
             document.getElementById('studentList').innerHTML = `<p class="text-center text-gray-400 py-4">請選擇上課時段</p>`;
         }
 
-        // 💡 輔助函數：把長串日期轉成簡潔的 MM/DD 格式
-        function formatDateSimple(dateStr) {
-            if (!dateStr) return "";
-            try {
-                // 如果原本就是 YYYY-MM-DD
-                if (dateStr.includes('-')) {
-                    const parts = dateStr.split('-');
-                    if (parts.length >= 3) return `${parts[1]}/${parts[2]}`;
-                }
-                // 如果是長串英文日期格式，透過 JS Date 解析
-                const d = new Date(dateStr);
-                if (!isNaN(d.getTime())) {
-                    const month = String(d.getMonth() + 1).padStart(2, '0');
-                    const day = String(d.getDate()).padStart(2, '0');
-                    return `${month}/${day}`;
-                }
-            } catch (e) {
-                console.error(e);
-            }
-            return dateStr; // 解析失敗則維持原樣
-        }
-
         function renderStudentList() {
             if (!globalData) return;
             const selectedDate = document.getElementById('classDate').value;
-            const selectedTimeSlot = document.getElementById('timeSlotSelect').value;
+            const selectedTimeSlot = document.getElementById('timeSlotSelect5') || document.getElementById('timeSlotSelect').value;
             const listContainer = document.getElementById('studentList');
 
-            if (!selectedTimeSlot) {
+            // 修正時段取值
+            const actualTimeSlot = document.getElementById('timeSlotSelect').value;
+
+            if (!actualTimeSlot) {
                 listContainer.innerHTML = `<p class="text-center text-gray-400 py-4">請選擇上課時段</p>`;
                 return;
             }
 
             const matchedStudents = globalData.schedule.filter(item => {
                 const itemDate = String(item.上課日期).split('T')[0];
-                return itemDate === selectedDate && String(item.時段) === String(selectedTimeSlot);
+                return itemDate === selectedDate && String(item.時段) === String(actualTimeSlot);
             });
 
             if (matchedStudents.length === 0) {
@@ -170,9 +151,8 @@
                 
                 const lastLesson = globalData.lastLessons[scheduleItem.姓名] || { date: "", summary: "尚無上課紀錄", note: "" };
                 
-                // 簡化後的日期顯示
-                const simpleDate = formatDateSimple(lastLesson.date);
-                const dateDisplayTag = simpleDate ? `(${simpleDate})` : '';
+                // 直接使用後端處理好的簡潔日期 (例如 09/19)
+                const dateTag = lastLesson.date ? `${lastLesson.date}` : '';
 
                 const badgeColor = remaining <= 2 ? 'text-red-500 bg-red-50 border-red-200' : 'text-gray-500 bg-gray-50 border-gray-200';
 
@@ -195,10 +175,10 @@
                             </div>
                         </div>
                         
-                        <!-- 💡 智慧決策面板：簡潔清爽的上次進度與備忘 -->
+                        <!-- 💡 智慧決策面板：極簡乾淨的上次進度與備忘 -->
                         <div class="bg-blue-50 border border-blue-100 rounded-lg p-2 text-xs space-y-1">
                             <div class="text-blue-800 font-medium">
-                                📌 上次進度 ${dateDisplayTag}：${lastLesson.summary}
+                                📌 上次 (${dateTag})：${lastLesson.summary}
                             </div>
                             ${noteHtml}
                         </div>
