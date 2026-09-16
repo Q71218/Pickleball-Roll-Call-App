@@ -67,7 +67,6 @@
     </div>
 
     <script>
-        // 🛑 請確認這裡的 GAS 網址是否正確
         const GAS_URL = "https://script.google.com/macros/s/AKfycbwVA2usi9g9Nl62yIng7J87WHEqPnH0FOUSSp3wDaB-EUQLJVFUgCnY7QmuTRIwylpI/exec";
 
         let globalData = null;
@@ -77,7 +76,6 @@
             fetchData();
         };
 
-        // 從後端取得所有資料
         function fetchData() {
             const loadingText = document.getElementById('loadingText');
             loadingText.innerText = "資料載入中...";
@@ -87,7 +85,7 @@
                 .then(data => {
                     globalData = data;
                     loadingText.innerText = "資料已同步";
-                    filterSchedule(); // 載入後自動依據預設日期篩選時段
+                    filterSchedule();
                 })
                 .catch(err => {
                     console.error(err);
@@ -95,7 +93,6 @@
                 });
         }
 
-        // 當日期改變時，自動更新「時段選項」
         function filterSchedule() {
             if (!globalData) return;
             const selectedDate = document.getElementById('classDate').value;
@@ -119,7 +116,28 @@
             document.getElementById('studentList').innerHTML = `<p class="text-center text-gray-400 py-4">請選擇上課時段</p>`;
         }
 
-        // 當選擇時段後，渲染該時段的學員名單（包含智慧決策面板：上次進度與備忘）
+        // 💡 輔助函數：把長串日期轉成簡潔的 MM/DD 格式
+        function formatDateSimple(dateStr) {
+            if (!dateStr) return "";
+            try {
+                // 如果原本就是 YYYY-MM-DD
+                if (dateStr.includes('-')) {
+                    const parts = dateStr.split('-');
+                    if (parts.length >= 3) return `${parts[1]}/${parts[2]}`;
+                }
+                // 如果是長串英文日期格式，透過 JS Date 解析
+                const d = new Date(dateStr);
+                if (!isNaN(d.getTime())) {
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return `${month}/${day}`;
+                }
+            } catch (e) {
+                console.error(e);
+            }
+            return dateStr; // 解析失敗則維持原樣
+        }
+
         function renderStudentList() {
             if (!globalData) return;
             const selectedDate = document.getElementById('classDate').value;
@@ -150,12 +168,14 @@
                 const used = Number(studentInfo.已上堂數) || 0;
                 const remaining = total - used;
                 
-                // 取得該學員最近一次的歷史紀錄與備忘
-                const lastLesson = globalData.lastLessons[scheduleItem.姓名] || { date: "無", summary: "尚無上課紀錄", note: "" };
+                const lastLesson = globalData.lastLessons[scheduleItem.姓名] || { date: "", summary: "尚無上課紀錄", note: "" };
                 
+                // 簡化後的日期顯示
+                const simpleDate = formatDateSimple(lastLesson.date);
+                const dateDisplayTag = simpleDate ? `(${simpleDate})` : '';
+
                 const badgeColor = remaining <= 2 ? 'text-red-500 bg-red-50 border-red-200' : 'text-gray-500 bg-gray-50 border-gray-200';
 
-                // 組裝教練備忘顯示邏輯
                 let noteHtml = lastLesson.note ? `<div class="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 mt-1">📝 備忘：${lastLesson.note}</div>` : '';
 
                 listContainer.innerHTML += `
@@ -175,10 +195,10 @@
                             </div>
                         </div>
                         
-                        <!-- 💡 智慧決策面板：一眼看見上次上課進度與教練備忘 -->
+                        <!-- 💡 智慧決策面板：簡潔清爽的上次進度與備忘 -->
                         <div class="bg-blue-50 border border-blue-100 rounded-lg p-2 text-xs space-y-1">
                             <div class="text-blue-800 font-medium">
-                                📌 上次進度 (${lastLesson.date})：${lastLesson.summary}
+                                📌 上次進度 ${dateDisplayTag}：${lastLesson.summary}
                             </div>
                             ${noteHtml}
                         </div>
@@ -187,7 +207,6 @@
             });
         }
 
-        // 送出點名
         function submitAttendance() {
             const date = document.getElementById('classDate').value;
             const timeSlot = document.getElementById('timeSlotSelect').value;
