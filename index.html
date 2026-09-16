@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>匹克球課堂點名系統</title>
-    <!-- 引入 Tailwind CSS 讓手機排版好看又快速 -->
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-50 min-y-screen pb-12">
+<body class="bg-gray-50 min-h-screen pb-12">
     <div class="max-w-md mx-auto bg-white min-h-screen shadow-lg flex flex-col">
         
         <!-- 頂部標題 -->
@@ -21,7 +20,15 @@
             <!-- 上課日期 -->
             <div>
                 <label class="block text-gray-700 text-sm font-bold mb-1">上課日期：</label>
-                <input type="date" id="classDate" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-green-500 outline-none">
+                <input type="date" id="classDate" onchange="filterSchedule()" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-green-500 outline-none">
+            </div>
+
+            <!-- 上課時段 (動態從 Schedule 讀取) -->
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-1">上課時段：</label>
+                <select id="timeSlotSelect" onchange="renderStudentList()" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-green-500 outline-none font-medium">
+                    <option value="">請先選擇日期與時段</option>
+                </select>
             </div>
 
             <!-- 當日教學簡述 -->
@@ -40,13 +47,13 @@
 
             <!-- 學員清單標題 -->
             <div class="flex justify-between items-center">
-                <span class="font-bold text-gray-800 text-lg">學員點名清單</span>
+                <span class="font-bold text-gray-800 text-lg">該時段學員點名清單</span>
                 <span id="loadingText" class="text-xs text-gray-400">載入中...</span>
             </div>
 
             <!-- 學員清單容器 -->
             <div id="studentList" class="space-y-3">
-                <!-- 動態載入的學員卡片會在這裡顯示 -->
+                <p class="text-center text-gray-400 py-4">請選擇日期與時段以顯示學員</p>
             </div>
         </div>
 
@@ -60,80 +67,137 @@
     </div>
 
     <script>
-        // 🛑【非常重要】請將下方引號內的網址，換成你在第二步取得的「網頁應用程式網址 (Web App URL)」
+        // 🛑 請將下方網址換成你的 GAS 網址
         const GAS_URL = "https://script.google.com/macros/s/AKfycbwVA2usi9g9Nl62yIng7J87WHEqPnH0FOUSSp3wDaB-EUQLJVFUgCnY7QmuTRIwylpI/exec";
 
-        // 頁面載入完成後自動取得學員名單與預設今天日期
+        let globalData = null;
+
         window.onload = function() {
             document.getElementById('classDate').valueAsDate = new Date();
-            loadStudents();
+            fetchData();
         };
 
-        // 讀取學員名單函式
-        function loadStudents() {
-            const listContainer = document.getElementById('studentList');
+        // 從後端取得所有資料
+        function fetchData() {
             const loadingText = document.getElementById('loadingText');
+            loadingText.innerText = "資料載入中...";
 
             fetch(GAS_URL)
                 .then(res => res.json())
                 .then(data => {
-                    listContainer.innerHTML = '';
-                    loadingText.innerText = `共 ${data.length} 位學員`;
-
-                    if (data.length === 0) {
-                        listContainer.innerHTML = `<p class="text-center text-gray-400 py-4">目前沒有學員資料，請至 Google 試算表新增。</p>`;
-                        return;
-                    }
-
-                    data.forEach(student => {
-                        // 計算剩餘堂數 (購買堂數 - 已上堂數)
-                        const total = Number(student.購買堂數) || 0;
-                        const used = Number(student.已上堂數) || 0;
-                        const remaining = total - used;
-                        
-                        // 如果剩餘堂數 <= 2，顯示紅字提醒
-                        const badgeColor = remaining <= 2 ? 'text-red-500 bg-red-50 border-red-200' : 'text-gray-500 bg-gray-50 border-gray-200';
-
-                        listContainer.innerHTML += `
-                            <div class="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-200 shadow-sm">
-                                <div>
-                                    <div class="font-bold text-gray-800 text-base">${student.姓名}</div>
-                                    <div class="text-xs px-2 py-0.5 rounded-md inline-block mt-1 border ${badgeColor}">
-                                        剩餘堂數: ${remaining} (已上: ${used})
-                                    </div>
-                                </div>
-                                <div class="flex items-center space-x-2">
-                                    <select data-id="${student.學員ID}" data-name="${student.姓名}" class="attendance-status border border-gray-300 rounded-lg p-2 bg-gray-50 font-medium text-sm focus:ring-2 focus:ring-green-500 outline-none">
-                                        <option value="Present" selected>🟢 到班</option>
-                                        <option value="Absent">🔴 缺席</option>
-                                    </select>
-                                </div>
-                            </div>
-                        `;
-                    });
+                    globalData = data;
+                    loadingText.innerText = "資料已同步";
+                    filterSchedule(); // 載入後自動依據預設日期篩選時段
                 })
                 .catch(err => {
                     console.error(err);
                     loadingText.innerText = '載入失敗';
-                    listContainer.innerHTML = `<p class="text-center text-red-400 py-4">無法載入學員資料，請檢查 GAS 網址或網路連線。</p>`;
                 });
         }
 
-        // 送出點名邏輯
+        // 當日期改變時，自動更新「時段選項」
+        function filterSchedule() {
+            if (!globalData) return;
+            const selectedDate = document.getElementById('classDate').value;
+            const timeSlotSelect = document.getElementById('timeSlotSelect');
+            
+            // 找出該日期在 Schedule 中所有的時段
+            const matchedSchedules = globalData.schedule.filter(item => {
+                // 處理日期格式比對
+                const itemDate = String(item.上課日期).split('T')[0];
+                return itemDate === selectedDate;
+            });
+
+            timeSlotSelect.innerHTML = '<option value="">-- 請選擇上課時段 --</option>';
+            
+            // 取得不重複的時段
+            const uniqueTimeSlots = [...new Set(matchedSchedules.map(item => item.時段))];
+            
+            uniqueTimeSlots.forEach(slot => {
+                if (slot) {
+                    timeSlotSelect.innerHTML += `<option value="${slot}">${slot}</option>`;
+                }
+            });
+
+            // 清空學員清單
+            document.getElementById('studentList').innerHTML = `<p class="text-center text-gray-400 py-4">請選擇上課時段</p>`;
+        }
+
+        // 當選擇時段後，渲染該時段的學員名單
+        function renderStudentList() {
+            if (!globalData) return;
+            const selectedDate = document.getElementById('classDate').value;
+            const selectedTimeSlot = document.getElementById('timeSlotSelect').value;
+            const listContainer = document.getElementById('studentList');
+
+            if (!selectedTimeSlot) {
+                listContainer.innerHTML = `<p class="text-center text-gray-400 py-4">請選擇上課時段</p>`;
+                return;
+            }
+
+            // 篩選出該日期與該時段的排課學員
+            const matchedStudents = globalData.schedule.filter(item => {
+                const itemDate = String(item.上課日期).split('T')[0];
+                return itemDate === selectedDate && item.時段 === selectedTimeSlot;
+            });
+
+            if (matchedStudents.length === 0) {
+                listContainer.innerHTML = `<p class="text-center text-gray-400 py-4">此時段沒有排課學員</p>`;
+                return;
+            }
+
+            listContainer.innerHTML = '';
+
+            matchedStudents.forEach(scheduleItem => {
+                // 從總表 (Students) 找出該學員的詳細資料（如購買堂數、已上堂數）
+                const studentInfo = globalData.students.find(s => String(s.學員ID) === String(scheduleItem.學員ID)) || { 購買堂數: 0, 已上堂數: 0 };
+                
+                const total = Number(studentInfo.購買堂數) || 0;
+                const used = Number(studentInfo.已上堂數) || 0;
+                const remaining = total - used;
+                
+                const badgeColor = remaining <= 2 ? 'text-red-500 bg-red-50 border-red-200' : 'text-gray-500 bg-gray-50 border-gray-200';
+
+                listContainer.innerHTML += `
+                    <div class="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-200 shadow-sm">
+                        <div>
+                            <div class="font-bold text-gray-800 text-base">${scheduleItem.姓名}</div>
+                            <div class="text-xs px-2 py-0.5 rounded-md inline-block mt-1 border ${badgeColor}">
+                                剩餘堂數: ${remaining} (已上: ${used})
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <select data-id="${scheduleItem.學員ID}" data-name="${scheduleItem.姓名}" class="attendance-status border border-gray-300 rounded-lg p-2 bg-gray-50 font-medium text-sm focus:ring-2 focus:ring-green-500 outline-none">
+                                <option value="Present" selected>🟢 到班</option>
+                                <option value="Absent">🔴 缺席</option>
+                            </select>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // 送出點名
         function submitAttendance() {
             const date = document.getElementById('classDate').value;
+            const timeSlot = document.getElementById('timeSlotSelect').value;
             const teachingSummary = document.getElementById('teachingSummary').value;
             const note = document.getElementById('classNote').value;
             const selects = document.querySelectorAll('.attendance-status');
             const submitBtn = document.getElementById('submitBtn');
 
-            if (!date) {
-                alert('請選擇上課日期！');
+            if (!date || !timeSlot) {
+                alert('請完整選擇上課日期與時段！');
                 return;
             }
 
             if (!teachingSummary) {
                 alert('請填寫當日教學簡述！');
+                return;
+            }
+
+            if (selects.length === 0) {
+                alert('目前沒有可點名的學員！');
                 return;
             }
 
@@ -146,7 +210,6 @@
                 });
             });
 
-            // 鎖定按鈕防止重複點擊
             submitBtn.disabled = true;
             submitBtn.innerText = '正在送出並更新堂數...';
 
@@ -154,6 +217,7 @@
                 method: 'POST',
                 body: JSON.stringify({ 
                     date: date, 
+                    timeSlot: timeSlot,
                     teachingSummary: teachingSummary, 
                     note: note, 
                     attendance: attendanceData 
@@ -163,7 +227,7 @@
             .then(res => {
                 if(res.status === 'success') {
                     alert('🎉 點名成功！學員堂數已自動更新。');
-                    location.reload(); // 重新整理頁面
+                    location.reload();
                 } else {
                     alert('送出發生錯誤：' + res.message);
                     submitBtn.disabled = false;
