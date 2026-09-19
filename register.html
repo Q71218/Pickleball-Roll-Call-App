@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>學員管理與購課 - 場館人員系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen pb-12">
+    <div class="max-w-md mx-auto bg-white min-h-screen shadow-lg flex flex-col">
+        
+        <div class="bg-blue-600 text-white p-4 flex items-center justify-between shadow sticky top-0 z-10">
+            <a href="index.html" class="text-xs bg-blue-700 hover:bg-blue-800 px-3 py-1.5 rounded-lg transition">⬅ 返回選單</a>
+            <span class="font-bold text-lg" id="formTitle">🧑‍💼 新增學員與購課</span>
+            <button onclick="resetForm()" class="text-xs bg-blue-700 hover:bg-blue-800 px-2 py-1.5 rounded-lg transition">重設</button>
+        </div>
+
+        <div class="p-4 flex-1 space-y-4">
+            <!-- 隱藏欄位：用來判斷目前是「新增」還是「修改」 -->
+            <input type="hidden" id="editStudentId" value="">
+
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-1">學員姓名：</label>
+                <input type="text" id="studentName" placeholder="例如：王小明" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-1">學員電話：</label>
+                <input type="text" id="studentPhone" placeholder="例如：0912-345-678" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-1">購買總堂數：</label>
+                <input type="number" id="buyCount" value="10" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none font-bold text-blue-600">
+            </div>
+
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-1">學員備註：</label>
+                <textarea id="registerNote" rows="2" placeholder="例如：初學者、球拍自備..." class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+            </div>
+
+            <button onclick="submitForm()" id="submitBtn" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition shadow-md">
+                確認新增學員
+            </button>
+
+            <hr class="my-4">
+
+            <!-- 現有學員清單區塊 -->
+            <div>
+                <div class="font-bold text-gray-700 mb-2 flex justify-between items-center">
+                    <span>📋 現有學員清單與管理</span>
+                    <span id="studentCount" class="text-xs text-gray-400 font-normal">載入中...</span>
+                </div>
+                <div id="studentListContainer" class="space-y-2">
+                    <p class="text-sm text-gray-400">正在讀取學員資料...</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbwVA2usi9g9Nl62yIng7J87WHEqPnH0FOUSSp3wDaB-EUQLJVFUgCnY7QmuTRIwylpI/exec";
+        let cachedStudents = [];
+
+        window.onload = function() {
+            loadStudents();
+        };
+
+        function loadStudents() {
+            fetch(GAS_URL)
+            .then(res => res.json())
+            .then(data => {
+                cachedStudents = data.students || [];
+                renderStudentList(cachedStudents);
+            })
+            .catch(err => {
+                console.error(err);
+                document.getElementById('studentListContainer').innerHTML = '<p class="text-sm text-red-400">載入學員清單失敗。</p>';
+            });
+        }
+
+        function renderStudentList(students) {
+            const container = document.getElementById('studentListContainer');
+            document.getElementById('studentCount').innerText = `共 ${students.length} 位學員`;
+
+            if (students.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-400">目前尚無學員資料。</p>';
+                return;
+            }
+
+            let html = '';
+            students.forEach((stu, index) => {
+                html += `
+                    <div class="p-3 bg-gray-50 rounded-xl border flex items-center justify-between">
+                        <div>
+                            <div class="font-bold text-gray-800">${stu['姓名']} <span class="text-xs text-blue-600 font-normal">(剩餘: ${stu['剩餘堂數'] ?? 0}堂)</span></div>
+                            <div class="text-xs text-gray-500">電話: ${stu['電話'] || '未填'} | ID: ${stu['學員ID']}</div>
+                            <div class="text-xs text-gray-400">備註: ${stu['學員備註'] || '無'}</div>
+                        </div>
+                        <button onclick="prepareEdit('${stu['學員ID']}')" class="px-3 py-1.5 text-xs font-bold bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition shadow-sm">
+                            編輯
+                        </button>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function prepareEdit(studentId) {
+            const stu = cachedStudents.find(s => String(s['學員ID']) === String(studentId));
+            if (!stu) return;
+
+            document.getElementById('editStudentId').value = stu['學員ID'];
+            document.getElementById('studentName').value = stu['姓名'] || '';
+            document.getElementById('studentPhone').value = stu['電話'] || '';
+            document.getElementById('buyCount').value = stu['購買堂數'] || 0;
+            document.getElementById('registerNote').value = stu['學員備註'] || '';
+
+            document.getElementById('formTitle').innerText = '✏️ 修改學員資料';
+            document.getElementById('submitBtn').innerText = '儲存修改';
+            document.getElementById('submitBtn').className = "w-full bg-amber-600 text-white font-bold py-3 rounded-xl hover:bg-amber-700 transition shadow-md";
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetForm() {
+            document.getElementById('editStudentId').value = '';
+            document.getElementById('studentName').value = '';
+            document.getElementById('studentPhone').value = '';
+            document.getElementById('buyCount').value = '10';
+            document.getElementById('registerNote').value = '';
+
+            document.getElementById('formTitle').innerText = '🧑‍💼 新增學員與購課';
+            document.getElementById('submitBtn').innerText = '確認新增學員';
+            document.getElementById('submitBtn').className = "w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition shadow-md";
+        }
+
+        function submitForm() {
+            const editId = document.getElementById('editStudentId').value;
+            const name = document.getElementById('studentName').value;
+            const phone = document.getElementById('studentPhone').value;
+            const buyCount = document.getElementById('buyCount').value;
+            const note = document.getElementById('registerNote').value;
+            const submitBtn = document.getElementById('submitBtn');
+
+            if (!name) {
+                alert('請填寫學員姓名！');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.innerText = '資料提交中...';
+
+            const actionType = editId ? 'updateStudent' : 'register';
+            const payload = {
+                action: actionType,
+                studentId: editId,
+                name: name,
+                phone: phone,
+                buyCount: buyCount,
+                note: note
+            };
+
+            fetch(GAS_URL, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(res => {
+                if (res.status === 'success') {
+                    alert(editId ? '🎉 學員資料修改成功！' : '🎉 新增學員成功！');
+                    resetForm();
+                    loadStudents();
+                } else {
+                    alert('操作失敗：' + (res.message || '未知錯誤'));
+                }
+                submitBtn.disabled = false;
+            })
+            .catch(err => {
+                console.error(err);
+                alert('連線失敗，請檢查網路！');
+                submitBtn.disabled = false;
+                submitBtn.innerText = editId ? '儲存修改' : '確認新增學員';
+            });
+        }
+    </script>
+</body>
+</html>
