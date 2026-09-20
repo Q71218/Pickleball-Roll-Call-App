@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>課堂點名 - 教練專用系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen pb-12">
+    <div class="max-w-md mx-auto bg-white min-h-screen shadow-lg flex flex-col">
+        
+        <div class="bg-green-600 text-white p-4 flex items-center justify-between shadow">
+            <a href="index.html" class="text-xs bg-green-700 hover:bg-green-800 px-3 py-1.5 rounded-lg transition">⬅ 返回選單</a>
+            <span class="font-bold text-lg">🎾 教練課堂點名</span>
+            <div class="w-16"></div>
+        </div>
+
+        <div class="p-4 flex-1 space-y-4">
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-1">上課日期：</label>
+                <input type="date" id="lessonDate" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-green-500 outline-none mb-2">
+                
+                <!-- 快速上課日期按鈕 -->
+                <div class="flex space-x-2">
+                    <button type="button" onclick="setQuickDate(0)" class="flex-1 bg-gray-100 hover:bg-green-50 hover:text-green-600 hover:border-green-300 border text-gray-600 text-xs font-bold py-1.5 rounded-lg transition">
+                        📅 今天
+                    </button>
+                    <button type="button" onclick="setQuickDate(1)" class="flex-1 bg-gray-100 hover:bg-green-50 hover:text-green-600 hover:border-green-300 border text-gray-600 text-xs font-bold py-1.5 rounded-lg transition">
+                        📅 明天
+                    </button>
+                    <button type="button" onclick="setQuickDate(2)" class="flex-1 bg-gray-100 hover:bg-green-50 hover:text-green-600 hover:border-green-300 border text-gray-600 text-xs font-bold py-1.5 rounded-lg transition">
+                        📅 後天
+                    </button>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-1">上課時段：</label>
+                <input type="text" id="timeSlot" placeholder="例如：14:00 - 15:30" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-green-500 outline-none">
+            </div>
+
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-1">授課教練：</label>
+                <input type="text" id="coachName" placeholder="例如：王教練" class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-green-500 outline-none">
+            </div>
+
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-1">教學摘要 / 進度：</label>
+                <textarea id="teachingSummary" rows="2" placeholder="例如：今天練習正手拍抽球..." class="w-full border rounded-lg p-2.5 bg-gray-50 focus:ring-2 focus:ring-green-500 outline-none"></textarea>
+            </div>
+
+            <hr class="my-2">
+
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <div class="font-bold text-gray-700 text-sm">學員出席點名 <span class="text-xs text-gray-400 font-normal">(僅顯示有剩餘堂數的學員)</span></div>
+                </div>
+                <div id="studentListContainer" class="space-y-2">
+                    <p class="text-sm text-gray-400">正在載入學員名單...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 bg-white border-t sticky bottom-0 shadow-inner">
+            <button onclick="submitAttendance()" id="submitBtn" class="w-full bg-green-600 text-white font-bold py-3.5 rounded-xl hover:bg-green-700 transition shadow-md">
+                送出點名紀錄
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbwVA2usi9g9Nl62yIng7J87WHEqPnH0FOUSSp3wDaB-EUQLJVFUgCnY7QmuTRIwylpI/exec";
+        let allStudents = [];
+
+        window.onload = function() {
+            // 自動帶入今天日期
+            setQuickDate(0);
+            
+            // 自動帶入登入的使用者名稱當作預設教練
+            const username = localStorage.getItem('username');
+            if (username) {
+                document.getElementById('coachName').value = username;
+            }
+            loadStudents();
+        };
+
+        // 快速設定日期按鈕 (0=今天, 1=明天, 2=後天)
+        function setQuickDate(dayOffset) {
+            const d = new Date();
+            d.setDate(d.getDate() + dayOffset);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            document.getElementById('lessonDate').value = `${year}-${month}-${day}`;
+        }
+
+        function loadStudents() {
+            fetch(GAS_URL + "?rand=" + new Date().getTime())
+            .then(res => res.json())
+            .then(data => {
+                allStudents = data.students || [];
+                renderFilteredStudents();
+            })
+            .catch(err => {
+                console.error(err);
+                document.getElementById('studentListContainer').innerHTML = '<p class="text-sm text-red-400">載入學員名單失敗，請檢查網路。</p>';
+            });
+        }
+
+        function renderFilteredStudents() {
+            const container = document.getElementById('studentListContainer');
+            
+            // 過濾：只保留剩餘堂數大於 0 且姓名不是空的學員
+            const activeStudents = allStudents.filter(stu => {
+                const remain = Number(stu['剩餘堂數'] ?? 0);
+                const name = String(stu['姓名'] || '').trim();
+                return remain > 0 && name !== '';
+            });
+
+            if (activeStudents.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">目前沒有剩餘堂數大於 0 的學員可供點名。</p>';
+                return;
+            }
+
+            let html = '';
+            activeStudents.forEach((stu) => {
+                // 在原始全陣列中找到這名學員的真實 index，以便操作狀態
+                const realIndex = allStudents.findIndex(s => s['學員ID'] === stu['學員ID']);
+                
+                // 預設點名狀態為出席
+                if (!allStudents[realIndex].status) {
+                    allStudents[realIndex].status = 'Present';
+                }
+
+                html += `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl border">
+                        <div>
+                            <div class="font-bold text-gray-800">${stu['姓名']} <span class="text-xs text-green-600 font-bold">(剩餘: ${stu['剩餘堂數']}堂)</span></div>
+                            <div class="text-xs text-gray-400">ID: ${stu['學員ID']}</div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button type="button" onclick="setStatus(${realIndex}, 'Present')" id="btn-present-${realIndex}" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-green-600 text-white shadow-sm">出席</button>
+                            <button type="button" onclick="setStatus(${realIndex}, 'Absent')" id="btn-absent-${realIndex}" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-200 text-gray-600">請假</button>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function setStatus(index, status) {
+            allStudents[index].status = status;
+            const btnPresent = document.getElementById(`btn-present-${index}`);
+            const btnAbsent = document.getElementById(`btn-absent-${index}`);
+
+            if (status === 'Present') {
+                btnPresent.className = "px-3 py-1.5 text-xs font-bold rounded-lg bg-green-600 text-white shadow-sm";
+                btnAbsent.className = "px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-200 text-gray-600";
+            } else {
+                btnPresent.className = "px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-200 text-gray-600";
+                btnAbsent.className = "px-3 py-1.5 text-xs font-bold rounded-lg bg-red-600 text-white shadow-sm";
+            }
+        }
+
+        function submitAttendance() {
+            const date = document.getElementById('lessonDate').value;
+            const timeSlot = document.getElementById('timeSlot').value;
+            const coach = document.getElementById('coachName').value;
+            const teachingSummary = document.getElementById('teachingSummary').value;
+            const submitBtn = document.getElementById('submitBtn');
+
+            if (!date || !timeSlot) {
+                alert('請填寫上課日期與時段！');
+                return;
+            }
+
+            // 只送出「有剩餘堂數」且被點名的學員清單
+            const attendanceList = allStudents
+                .filter(stu => Number(stu['剩餘堂數'] ?? 0) > 0 && String(stu['姓名'] || '').trim() !== '')
+                .map(stu => ({
+                    studentId: stu['學員ID'],
+                    name: stu['姓名'],
+                    status: stu.status || 'Present'
+                }));
+
+            if (attendanceList.length === 0) {
+                alert('目前沒有可點名的學員！');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.innerText = '點名資料提交中...';
+
+            const payload = {
+                date: date,
+                timeSlot: timeSlot,
+                coach: coach,
+                teachingSummary: teachingSummary,
+                note: '',
+                attendance: attendanceList
+            };
+
+            fetch(GAS_URL, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(res => {
+                alert('🎉 點名成功，已自動扣除出席學員的剩餘堂數！');
+                location.reload();
+            })
+            .catch(err => {
+                console.error(err);
+                alert('連線失敗，請檢查網路！');
+                submitBtn.disabled = false;
+                submitBtn.innerText = '送出點名紀錄';
+            });
+        }
+    </script>
+</body>
+</html>
