@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>場館人員專用 - 多堂排課系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 md:p-8">
+    <div class="max-w-2xl mx-auto bg-white rounded-2xl shadow-md p-6 space-y-6">
+        
+        <!-- 頁首標題 -->
+        <div class="flex justify-between items-center border-b pb-4">
+            <div>
+                <h1 class="text-xl font-bold text-gray-800">🧑‍💼 場館人員專用系統</h1>
+                <p class="text-xs text-gray-500">學員購堂建檔 & 多堂課日期時段指定</p>
+            </div>
+            <a href="index.html" class="text-xs text-blue-600 hover:underline">← 回主選單</a>
+        </div>
+
+        <!-- 報名與排課表單 -->
+        <form id="enrollmentForm" class="space-y-6">
+            
+            <!-- 區塊一：學員基本資料與總堂數 -->
+            <div class="bg-blue-50 p-4 rounded-xl space-y-3 border border-blue-100">
+                <h2 class="font-bold text-blue-900 text-sm">1. 學員基本資料與購買堂數</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">學員姓名 *</label>
+                        <input type="text" id="studentName" required placeholder="例如：王小明" class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">聯絡電話 *</label>
+                        <input type="tel" id="studentPhone" required placeholder="0912345678" class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">購買總堂數 * (修改數字會自動產生對應排課欄位)</label>
+                    <input type="number" id="purchasedLessons" min="1" max="30" value="3" required class="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white font-bold text-blue-600">
+                </div>
+            </div>
+
+            <!-- 區塊二：動態產生各堂課的日期、時段與教練 -->
+            <div class="bg-green-50 p-4 rounded-xl space-y-3 border border-green-100">
+                <h2 class="font-bold text-green-900 text-sm">2. 設定每一堂課的日期、時段與教練</h2>
+                <div id="scheduleRowsContainer" class="space-y-3">
+                    <!-- 動態 JavaScript 產生的排課列會放在這裡 -->
+                </div>
+            </div>
+
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow">
+                💾 儲存學員資料並批次完成排課
+            </button>
+        </form>
+
+        <!-- 最近建立的紀錄 -->
+        <div class="pt-4 border-t">
+            <h3 class="font-bold text-gray-700 text-sm mb-2">📋 最近建立的排課紀錄</h3>
+            <div id="recentList" class="space-y-2 text-xs text-gray-600">
+                <!-- 動態顯示 -->
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // 取得預設明天的日期格式字串 (YYYY-MM-DD)
+        function getDefaultDate(addDays = 0) {
+            const d = new Date();
+            d.setDate(d.getDate() + addDays);
+            return d.toISOString().split('T')[0];
+        }
+
+        // 動態生成指定堂數的排課輸入列
+        function generateScheduleRows() {
+            const count = parseInt(document.getElementById('purchasedLessons').value) || 1;
+            const container = document.getElementById('scheduleRowsContainer');
+            container.innerHTML = '';
+
+            for (let i = 1; i <= count; i++) {
+                // 每堂課預設日期隔週或隔天遞增
+                const defaultDate = getDefaultDate(i - 1);
+
+                const rowHTML = `
+                    <div class="p-3 bg-white rounded-xl border border-green-200 shadow-sm space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-green-800 text-xs bg-green-100 px-2 py-0.5 rounded">第 ${i} 堂課</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <div>
+                                <label class="block text-[11px] text-gray-500 mb-0.5">上課日期</label>
+                                <input type="date" name="lessonDate" value="${defaultDate}" required class="w-full p-2 border rounded-lg text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-gray-500 mb-0.5">上課時段</label>
+                                <select name="lessonTime" required class="w-full p-2 border rounded-lg text-xs bg-white">
+                                    <option value="09:00 - 10:30">09:00 - 10:30</option>
+                                    <option value="10:30 - 12:00">10:30 - 12:00</option>
+                                    <option value="14:00 - 15:30" selected>14:00 - 15:30</option>
+                                    <option value="15:30 - 17:00">15:30 - 17:00</option>
+                                    <option value="19:00 - 20:30">19:00 - 20:30</option>
+                                    <option value="20:30 - 22:00">20:30 - 22:00</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-gray-500 mb-0.5">指派教練</label>
+                                <select name="lessonCoach" class="w-full p-2 border rounded-lg text-xs bg-white">
+                                    <option value="張教練">張教練</option>
+                                    <option value="林教練">林教練</option>
+                                    <option value="陳教練">陳教練</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', rowHTML);
+            }
+        }
+
+        // 當購買堂數改變時，自動重新產生排課列
+        document.getElementById('purchasedLessons').addEventListener('input', generateScheduleRows);
+
+        // 初始化先產生預設堂數（3堂）的欄位
+        generateScheduleRows();
+
+        // 讀取並顯示已有的紀錄
+        function renderRecent() {
+            const students = JSON.parse(localStorage.getItem('studentsList') || '[]');
+            const container = document.getElementById('recentList');
+            if (students.length === 0) {
+                container.innerHTML = '<p class="text-gray-400">目前尚無排課紀錄</p>';
+                return;
+            }
+
+            container.innerHTML = students.slice(-4).reverse().map(s => `
+                <div class="p-3 bg-gray-50 rounded-lg flex justify-between items-center border">
+                    <div>
+                        <span class="font-bold text-gray-800 text-sm">${s.name}</span> (${s.phone})
+                        <div class="text-gray-500 text-[11px]">總共購買 ${s.lessons.length} 堂課已完成排定</div>
+                    </div>
+                    <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-bold">建檔完成</span>
+                </div>
+            `).join('');
+        }
+
+        // 表單送出處理
+        document.getElementById('enrollmentForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const name = document.getElementById('studentName').value;
+            const phone = document.getElementById('studentPhone').value;
+            const totalCount = parseInt(document.getElementById('purchasedLessons').value);
+
+            // 收集所有動態產生的排課列資料
+            const dateInputs = document.querySelectorAll('input[name="lessonDate"]');
+            const timeSelects = document.querySelectorAll('select[name="lessonTime"]');
+            const coachSelects = document.querySelectorAll('select[name="lessonCoach"]');
+
+            const lessonsArr = [];
+            for (let i = 0; i < dateInputs.length; i++) {
+                lessonsArr.push({
+                    lessonNo: i + 1,
+                    date: dateInputs[i].value,
+                    time: timeSelects[i].value,
+                    coach: coachSelects[i].value,
+                    attended: false // 預設未點名
+                });
+            }
+
+            const newStudentRecord = {
+                id: Date.now(),
+                name: name,
+                phone: phone,
+                lessons: lessonsArr
+            };
+
+            let students = JSON.parse(localStorage.getItem('studentsList') || '[]');
+            students.push(newStudentRecord);
+            localStorage.setItem('studentsList', JSON.stringify(students));
+
+            alert(`✅ 成功為 ${name} 建立資料，並排定共 ${totalCount} 堂課的日期與時段！`);
+            
+            // 重置表單
+            document.getElementById('studentName').value = '';
+            document.getElementById('studentPhone').value = '';
+            document.getElementById('purchasedLessons').value = '3';
+            generateScheduleRows();
+            renderRecent();
+        });
+
+        // 頁面載入時讀取紀錄
+        renderRecent();
+    </script>
+</body>
+</html>
